@@ -219,18 +219,32 @@ def process_symbol(symbol, interval,
 
 def run_bot(symbols_to_trade, trade_interval_str='1h', bot_config=None):
     """
-    Main bot loop. Bot_config can override default indicator parameters.
+    Main bot loop that processes symbols continuously.
+
+    :param symbols_to_trade: A list of trading symbols (e.g., ['XRPUSDT', 'ADAUSDT'])
+    :param trade_interval_str: String representation of the interval (e.g., '1h', '4h', '1d')
+    :param bot_config: Dictionary to override default strategy parameters.
     """
-    global client
+    global client # Indicate that we are using and potentially modifying the global client
+
     if client is None:
+        print("Initializing Binance Client...")
         try:
-            client = Client()
-            client.ping() # Test connection
-            print("Binance client initialized and connection successful.")
+            # If API keys were configured (e.g., via os.environ), they would be passed here:
+            # import os # Make sure os is imported if using os.environ
+            # api_key = os.environ.get('BINANCE_API_KEY')
+            # api_secret = os.environ.get('BINANCE_API_SECRET')
+            # if api_key and api_secret:
+            #    client = Client(api_key, api_secret)
+            # else:
+            #    client = Client() # For public data only if keys are not found
+            client = Client() # Using public client for now
+            client.ping() # Verify connection
+            print("Binance Client initialized and connection successful.")
         except Exception as e:
-            print(f"Error: Could not initialize Binance client or connect: {e}")
-            print("Trading functions requiring live data will not work.")
-            # Depending on desired behavior, could exit or run in a mode without API calls
+            print(f"Error: Failed to initialize or connect with Binance Client: {e}")
+            print("Please check your internet connection. If using API keys, verify their validity and permissions.")
+            print("Bot cannot continue without a working client. Exiting.")
             return # Exit if client can't be initialized
 
     if bot_config is None:
@@ -247,9 +261,10 @@ def run_bot(symbols_to_trade, trade_interval_str='1h', bot_config=None):
         print(f"Error: Invalid trade interval: {trade_interval_str}. Valid options: {list(interval_map.keys())}")
         return
 
-    print(f"Starting trading bot for symbols: {symbols_to_trade} with interval: {trade_interval_str}")
+    print(f"Starting trading bot for symbols: {symbols_to_trade} with data interval: {trade_interval_str}")
+    print(f"Bot will re-evaluate signals every 5 minutes. Press Ctrl+C to stop.")
 
-    # Apply global config or defaults
+    # Apply global config or defaults from bot_config or constants
     config = {
         'data_limit': bot_config.get('data_limit', DEFAULT_DATA_LIMIT),
         'sma_short_window': bot_config.get('sma_short_window', DEFAULT_SMA_SHORT_WINDOW),
@@ -259,37 +274,72 @@ def run_bot(symbols_to_trade, trade_interval_str='1h', bot_config=None):
         'rsi_overbought': bot_config.get('rsi_overbought', DEFAULT_RSI_OVERBOUGHT),
     }
 
-    for symbol in symbols_to_trade:
-        current_signal = process_symbol(symbol, binance_interval,
-                                        data_limit=config['data_limit'],
-                                        sma_short_window=config['sma_short_window'],
-                                        sma_long_window=config['sma_long_window'],
-                                        rsi_window=config['rsi_window'],
-                                        rsi_oversold=config['rsi_oversold'],
-                                        rsi_overbought=config['rsi_overbought'])
-        print(f"Action/Consideration for {symbol}: {current_signal}")
-        print("-" * 70)
+    try:
+        while True:
+            print(f"\n--- Starting new cycle at {time.strftime('%Y-%m-%d %H:%M:%S')} ---")
+            for symbol in symbols_to_trade:
+                # process_symbol uses the global client implicitly via get_historical_klines
+                current_signal = process_symbol(symbol, binance_interval,
+                                                data_limit=config['data_limit'],
+                                                sma_short_window=config['sma_short_window'],
+                                                sma_long_window=config['sma_long_window'],
+                                                rsi_window=config['rsi_window'],
+                                                rsi_oversold=config['rsi_oversold'],
+                                                rsi_overbought=config['rsi_overbought'])
+                # The process_symbol function already prints the latest signal and data.
+                # print(f"Action/Consideration for {symbol}: {current_signal}") # This is redundant
+                print("-" * 70) # Separator between symbols
 
-    print("Bot run complete for all symbols.")
-    print("\nNote: This bot provides signals based on historical data and technical indicators. It does not execute trades. Always use sound risk management and test strategies thoroughly before live trading.")
-    print("For live trading, ensure API keys are set as environment variables (e.g., BINANCE_API_KEY, BINANCE_API_SECRET) and used when initializing the Binance Client.")
+            print(f"--- Cycle complete. Waiting for 5 minutes before next run. ---")
+            time.sleep(300)  # Sleep for 300 seconds (5 minutes)
+
+    except KeyboardInterrupt:
+        print("\nBot stopped by user (Ctrl+C). Exiting gracefully.")
+    except Exception as e:
+        print(f"An unexpected error occurred during bot operation: {e}")
+        # Consider adding more specific error handling or logging here for robustness
+    finally:
+        print("Trading bot has shut down.")
 
 
 if __name__ == '__main__':
+    # Define symbols and interval for the bot
     symbols = ['XRPUSDT', 'ADAUSDT']
-    trade_interval = '1h'
 
-    # Example of custom configuration for the bot run
-    custom_config = {
-        'data_limit': 300,
-        'sma_short_window': 20, # Example: Faster SMA
-        'sma_long_window': 100, # Example: Faster SMA
-        'rsi_window': 10,       # Example: More sensitive RSI
-        'rsi_oversold': 25,
-        'rsi_overbought': 75,
-    }
+    # Set the trade_interval to '5m' to align with the 5-minute execution cycle of run_bot()
+    trade_interval = '5m'
+    print(f"Bot configured to use '{trade_interval}' k-line data for analysis.")
 
-    # run_bot(symbols, trade_interval) # To run with default settings
-    run_bot(symbols, trade_interval, bot_config=custom_config) # To run with custom settings
+    # --- Configuration for Strategy Parameters ---
+    # The bot will run every 5 minutes. The `trade_interval` above defines the timeframe of
+    # the candles (e.g., '5m' candles).
+    # You can customize the strategy parameters (SMA windows, RSI settings, etc.)
+    # by passing a 'bot_config' dictionary to run_bot.
+    # If bot_config is None or an empty dictionary, the global DEFAULT_ values at the
+    # top of the script will be used for those parameters not in bot_config.
 
+    # Example: Using default indicator parameters with the 5m interval
+    # For a 5-minute interval, default SMAs (e.g., DEFAULT_SMA_SHORT_WINDOW=50, DEFAULT_SMA_LONG_WINDOW=200) mean looking at:
+    # SMA 50 on 5m chart: 50 * 5m = 250 minutes = ~4.17 hours
+    # SMA 200 on 5m chart: 200 * 5m = 1000 minutes = ~16.67 hours
+    # Ensure DEFAULT_DATA_LIMIT (currently 250) is sufficient for the longest window. For SMA 200, it is.
+
+    active_config = {} # An empty dict means use all DEFAULT_ values for indicators
+
+    # Example: Custom configuration for a 5-minute strategy (uncomment and modify to use)
+    # active_config = {
+    #     'data_limit': 300,        # Fetch more data if needed for very long SMAs or initial buffer
+    #     'sma_short_window': 12,   # e.g., 1-hour equivalent SMA (12 * 5m = 60m)
+    #     'sma_long_window': 72,    # e.g., 6-hour equivalent SMA (72 * 5m = 360m)
+    #     'rsi_window': 14,         # Standard RSI period
+    #     # rsi_oversold and rsi_overbought will use defaults if not specified here
+    # }
+
+    if active_config: # Check if dictionary is not empty
+        print(f"Using custom configuration for some/all strategy parameters: {active_config}")
+        # Parameters not in active_config will still use DEFAULT_ values via .get() in run_bot
+    else:
+        print("Using default global configuration for all strategy parameters.")
+
+    run_bot(symbols, trade_interval, bot_config=active_config)
 # End of trading_bot.py
