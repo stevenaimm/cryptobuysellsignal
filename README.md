@@ -1,6 +1,6 @@
 # Binance Trading Signal Bot
 
-This Python bot generates trading signals (Long/Short/Hold) for specified cryptocurrency pairs on Binance. It uses a common trading strategy based on Simple Moving Average (SMA) crossovers confirmed by the Relative Strength Index (RSI).
+This Python bot continuously monitors specified cryptocurrency pairs on Binance, generating trading signals (Long/Short/Hold) by evaluating market data every 5 minutes. It uses a common trading strategy based on Simple Moving Average (SMA) crossovers confirmed by the Relative Strength Index (RSI).
 
 ## Features
 
@@ -61,14 +61,17 @@ The main script is `trading_bot.py`. You can run it from the root directory of t
 python trading_bot.py
 ```
 
-The script will then process the default symbols (`XRPUSDT`, `ADAUSDT`) with the default 1-hour interval and strategy parameters, printing the latest signal for each.
+By default, the bot will now run in a continuous loop, using 5-minute k-line data (`5m` interval by default) and re-evaluating signals every 5 minutes. You will see output in the console for each cycle.
+
+### Stopping the Bot
+To stop the bot, press `Ctrl+C` in the terminal where it is running. The bot is designed to catch this interruption and shut down gracefully.
 
 ### Configuration
 
 You can customize the bot's behavior by modifying the parameters in the `if __name__ == '__main__':` block of `trading_bot.py`:
 
 *   **`symbols`**: A list of trading symbols to process (e.g., `['BTCUSDT', 'ETHUSDT']`).
-*   **`trade_interval`**: The k-line interval for analysis (e.g., `'15m'`, `'4h'`, `'1d'`).
+*   **`trade_interval`**: The k-line interval (candle size) for analysis (e.g., `'5m'`, `'15m'`, `'1h'`, `'1d'`). The default is `'5m'`. During each 5-minute operational cycle, the bot fetches the latest k-lines of this interval to update signals.
 *   **`custom_config`**: A dictionary to override default strategy parameters:
     *   `data_limit`: Number of k-lines to fetch (default: 250).
     *   `sma_short_window`: Period for the short SMA (default: 50).
